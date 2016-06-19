@@ -1,0 +1,86 @@
+<html>
+  <body>
+    <p>20 ScriptProcessorNodes are connected in series, which simply pass on
+      the microphone signal. You should hear a huge delay between the input and
+      the output.
+    </p>
+
+<script>
+
+var getUserMedia = function() {
+
+    // monkeypatch getUserMedia
+    navigator.getUserMedia =
+        navigator.getUserMedia ||
+        navigator.webkitGetUserMedia ||
+        navigator.mozGetUserMedia;
+
+    var options = {
+        "audio": {
+            "mandatory": {
+                "googEchoCancellation": "false",
+                "googAutoGainControl": "false",
+                "googNoiseSuppression": "false",
+                "googHighpassFilter": "false"
+            },
+            "optional": []
+        }
+    };
+
+    return new Promise(function (resolve, reject) {
+        navigator.getUserMedia(
+            options,
+            function (stream) { // success callback
+                resolve(stream);
+            },
+            function (error) { //error callback
+                reject(error);
+            }
+        );
+    });
+};
+
+function createScriptProcessorDelay() {
+   var scriptProcessorNode = audioContext.createScriptProcessor();
+
+   scriptProcessorNode.onaudioprocess = (audioProcessingEvent) => {
+       var inputBuffer = audioProcessingEvent.inputBuffer;
+       var outputBuffer = audioProcessingEvent.outputBuffer;
+
+       for (var channel = 0; channel < outputBuffer.numberOfChannels; channel++) {
+         var inputData = inputBuffer.getChannelData(channel);
+         var outputData = outputBuffer.getChannelData(channel);
+
+         for (var sample = 0; sample < inputBuffer.length; sample++) {
+           outputData[sample] = inputData[sample];
+         }
+       }
+
+   };
+
+   return scriptProcessorNode;
+
+}
+
+getUserMedia().then(function(stream) {
+   audioContext = new AudioContext();
+   var mediaStreamSource = audioContext.createMediaStreamSource(stream);
+   var NUM_NODES = 20;
+
+   var nodes = []
+   for (var i = 0; i < NUM_NODES; i++) {
+     nodes.push(createScriptProcessorDelay());
+   }
+
+   for (var i = 0; i < NUM_NODES-1; i++) {
+     nodes[i].connect(nodes[i+1]);
+   }
+
+   nodes[NUM_NODES-1].connect(audioContext.destination);
+   mediaStreamSource.connect(nodes[0]);
+});
+
+</script>
+  </body>
+
+</html>
